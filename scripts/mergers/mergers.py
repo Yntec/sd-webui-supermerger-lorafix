@@ -27,7 +27,6 @@ import sys
 from multiprocessing import cpu_count
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scripts.mergers.bcolors import bcolors
 
 from inspect import currentframe
 
@@ -39,6 +38,17 @@ def tryit(func):
         func() 
     except:
         pass 
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 stopmerge = False
 
@@ -174,14 +184,10 @@ def smerge(weights_a,weights_b,model_a,model_b,model_c,base_alpha,base_beta,mode
 
     caster(mergedmodel,False)
 
-    if calcmode == "trainDifference" and "Add" not in mode:
+    if calcmode == calcmode == "trainDifference" and "Add" not in mode:
         print(f"{bcolors.WARNING}Mode changed to add difference{bcolors.ENDC}")
         mode = "Add"
-        if model_c == "":
-            #fallback to avoid crash
-            model_c = model_a
-            print(f"{bcolors.WARNING}Substituting empty model_c with model_a{bcolors.ENDC}")
-            
+
     result_is_inpainting_model = False
     result_is_instruct_pix2pix_model = False
 
@@ -380,7 +386,7 @@ def smerge(weights_a,weights_b,model_a,model_b,model_c,base_alpha,base_beta,mode
                     if dw in skey:
                         flag = not dwn
                 if flag:
-                    dr = eratiodealer(dr,randomer,weight_index,num,lucks)
+                    dr = eratiodealer(dr,randomer,weight_index+1,num,lucks)
                     if deepprint :print(dbs,dws,key,dr)
                     current_alpha = dr
 
