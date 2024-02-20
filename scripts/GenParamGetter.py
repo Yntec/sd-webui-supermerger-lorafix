@@ -4,6 +4,10 @@ from scripts.mergers.mergers import smergegen, simggen
 from scripts.mergers.xyplot import numanager
 from modules import scripts, script_callbacks
 
+def vladslice(input):
+    input = input[:6]+input[7:12] + input[15:20] + [input[0]] + input[20:29] + [input[6]] +input[30:]
+    return input
+
 class GenParamGetter(scripts.Script):
     txt2img_gen_button = None
     img2img_gen_button = None
@@ -15,18 +19,6 @@ class GenParamGetter(scripts.Script):
     
     def show(self, is_img2img):
         return scripts.AlwaysVisible
-
-    def get_wanted_params(params,wanted):
-        output = []
-        for target in wanted:
-            if target is None:
-                output.append(params[0])
-                continue
-            for param in params:
-                if hasattr(param,"label"):
-                    if param.label == target:
-                        output.append(param)
-        return output
 
     def after_component(self, component: gr.components.Component, **_kwargs):
         """Find generate button"""
@@ -74,11 +66,13 @@ class GenParamGetter(scripts.Script):
 
             from pprint import pprint
 
-            if _is_txt2img:
-                components.paramsnames = [x.label if hasattr(x,"label") else "None" for x in params[0].inputs]
+            vlad = params[0].inputs[14].label == "CLIP skip"
+            #pprint([x.label if hasattr(x,"label") else "None" for x in params[0].inputs])
+            #if vlad: print("Vlad")
 
             if _is_txt2img:
-                components.txt2img_params = params[0].inputs 
+                components.txt2img_params = params[0].inputs if not vlad else vladslice(params[0].inputs)
+            #    pprint([x.label if hasattr(x,"label") else "None" for x in vladslice(params[0].inputs)])
             else:
                 components.img2img_params = params[0].inputs
         
@@ -98,7 +92,7 @@ class GenParamGetter(scripts.Script):
 
                 components.gen.click(
                     fn=simggen,
-                    inputs=[*components.genparams,*components.hiresfix,components.currentmodel,components.id_sets,gr.Textbox(value="No id",visible=False),*components.txt2img_params],
+                    inputs=[*components.genparams,*components.hiresfix,*components.txt2img_params,components.currentmodel,components.id_sets],
                     outputs=[*components.imagegal],
                 )
 
