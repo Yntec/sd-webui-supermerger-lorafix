@@ -1,5 +1,4 @@
 import random
-import gc
 from tracemalloc import Statistic
 import cv2
 import numpy as np
@@ -7,10 +6,10 @@ import os
 import copy
 import csv
 from PIL import Image
-from modules import images, sd_models, devices
+from modules import images
 from modules.shared import opts
 from scripts.mergers.mergers import TYPES,FINETUNEX,smerge,simggen,filenamecutter,draw_origin,wpreseter,savestatics
-from scripts.mergers.model_util import savemodel,usemodel
+from scripts.mergers.model_util import usemodelgen, savemodel
 
 hear = True
 hearm = False
@@ -41,10 +40,10 @@ def freezetime():
 def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                     weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
                     useblocks,custom_name,save_sets,id_sets,wpresets,deep,fine,bake_in_vae,
-                    s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,s_batch_size,
-                    genoptions,s_hrupscaler,s_hr2ndsteps,s_denois_str,s_hr_scale,
-                    lmode,lsets,llimits_u,llimits_l,lseed,lserial,lcustom,lround,
-                    id_task, prompt, negative_prompt, prompt_styles, steps, sampler_index, restore_faces, tiling, n_iter, batch_size, cfg_scale, seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_enable_extras, height, width, enable_hr, denoising_strength, hr_scale, hr_upscaler, hr_second_pass_steps, hr_resize_x, hr_resize_y, hr_sampler_index, hr_prompt, hr_negative_prompt, override_settings_texts, *args):
+                    prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,
+                    prompt_s,nprompt_s,steps_s,sampler_s,cfg_s,seed_s,w_s,h_s,batch_size,
+                    lmode,lsets,llimits_u,llimits_l,lseed,lserial,lcustom,lround):
     global numadepth
     grids = []
     sep = "|"
@@ -57,13 +56,14 @@ def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         xtype,xmen,ytype,ymen,weights_a,weights_b = crazyslot(lmode,lsets,llimits_u,llimits_l,lseed,lserial,lcustom,xtype,xmen,ytype,ymen,weights_a,weights_b,startmode)
 
     lucks = {"on":startmode == RAND, "mode":lmode,"set":lsets,"upp":llimits_u,"low":llimits_l,"seed":lseed,"num":lserial,"cust":lcustom,"round":int(lround)}
-    gensets = [id_task, prompt, negative_prompt, prompt_styles, steps, sampler_index, restore_faces, tiling, n_iter, batch_size, cfg_scale, seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_enable_extras, height, width, enable_hr, denoising_strength, hr_scale, hr_upscaler, hr_second_pass_steps, hr_resize_x, hr_resize_y, hr_sampler_index, hr_prompt, hr_negative_prompt, override_settings_texts, *args,]
-    gensets_s = [s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,s_batch_size,genoptions,s_hrupscaler,s_hr2ndsteps,s_denois_str,s_hr_scale]
+    gensets = [prompt,nprompt,steps,sampler,cfg,seed,w,h]
+    gensets_s = [prompt_s,nprompt_s,steps_s,sampler_s,cfg_s,seed_s,w_s,h_s]
+    hr_sets = [hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale]
 
     allsets = [xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                   weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
                   useblocks,custom_name,save_sets,id_sets,wpresets,deep,fine,bake_in_vae,
-                  gensets,gensets_s,lucks]
+                  gensets,hr_sets,gensets_s,batch_size,lucks]
 
     print(xtype,xmen,ytype,ymen,weights_a,weights_b)
 
@@ -105,8 +105,6 @@ def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                 wcounter += 1
         if wcounter == len(numadepth):
             break
-
-    gc.collect()
 
     return result,currentmodel,grids,a,b,c
 
@@ -154,7 +152,7 @@ def caster(news,hear):
 def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                   weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,
                   calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,fine,bake_in_vae,
-                  gensets,gensets_s,lucks):
+                  gensets,hr_sets,gensets_s,batch_size,lucks):
     global hear
     esettings = " ".join(esettings)
     savestat = "savestat" in deep
@@ -387,20 +385,14 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                 if not (((xtype=="seed") or (xtype=="prompt")) and xcount > 0):
                     _, currentmodel,modelid,theta_0, metadata =smerge(weights_a_in,weights_b_in, model_a,model_b,model_c, float(alpha),float(beta),mode,calcmode,
                                                                                         useblocks,"","",id_sets,False,deep_in,fine_in,bake_in_vae,deepprint = deepprint,lucks = lucks) 
-                    checkpoint_info = sd_models.get_closet_checkpoint_match(model_a)
-                    usemodel(checkpoint_info, already_loaded_state_dict=theta_0)
-
+                    usemodelgen(theta_0,model_a,currentmodel)
                 if "save model" in esettings:
                     savemodel(theta_0,currentmodel,custom_name,save_sets,model_a,metadata) 
-                theta_0 = {}
-                del theta_0
 
                 if xcount == 0: statid = modelid
 
-                image_temp = simggen(*gensets_s,*gensets,mergeinfo=currentmodel,id_sets=id_sets,modelid=modelid)
-                gc.collect()
-                devices.torch_gc()
-
+                image_temp = simggen(*gensets,*hr_sets,*gensets_s,batch_size,currentmodel,id_sets,modelid)
+                
                 xyimage.append(image_temp[0][0])
                 xcount+=1
                 deep = deepy
@@ -561,7 +553,7 @@ def effectivechecker(imgs,xs,ys,model_a,model_b,esettings):
 
         abs_diff = cv2.absdiff(im2 ,  im1)
 
-        abs_diff_t = cv2.threshold(abs_diff, 20, 255, cv2.THRESH_BINARY)[1]        
+        abs_diff_t = cv2.threshold(abs_diff, 5, 255, cv2.THRESH_BINARY)[1]        
         res = abs_diff_t.astype(np.uint8)
         percentage = (np.count_nonzero(res) * 100)/ res.size
         abs_diff = cv2.bitwise_not(abs_diff)
