@@ -3,7 +3,6 @@ import gc
 import os
 import os.path
 import re
-import json
 import shutil
 from importlib import reload
 from pprint import pprint
@@ -12,7 +11,6 @@ from modules import (devices, script_callbacks, scripts, sd_hijack, sd_models,sd
 from modules.scripts import basedir
 from modules.sd_models import checkpoints_loaded
 from modules.shared import opts
-from modules.sd_samplers import samplers
 from modules.ui import create_output_panel, create_refresh_button
 import scripts.mergers.mergers
 import scripts.mergers.pluslora
@@ -24,7 +22,6 @@ import csv
 import scripts.mergers.pluslora as pluslora
 from scripts.mergers.mergers import (TYPESEG, freezemtime, rwmergelog, simggen,smergegen)
 from scripts.mergers.xyplot import freezetime, nulister, numaker, numanager
-from scripts.mergers.model_util import filenamecutter
 
 gensets=argparse.Namespace()
 
@@ -61,10 +58,6 @@ def on_ui_tabs():
                     gr.HTML(value="<p>Merge models and load it for generation</p>")
 
                     with gr.Row():
-                        s_reverse= gr.Button(value="Load settings from:")
-                        mergeid = gr.Textbox(label="merged model ID (-1 for last)", elem_id="model_converter_custom_name",value = "-1")
-
-                    with gr.Row():
                         model_a = gr.Dropdown(sd_models.checkpoint_tiles(),elem_id="model_converter_model_name",label="Model A",interactive=True)
                         create_refresh_button(model_a, sd_models.list_models,lambda: {"choices": sd_models.checkpoint_tiles()},"refresh_checkpoint_Z")
 
@@ -78,7 +71,7 @@ def on_ui_tabs():
                                                         "Triple sum:A*(1-alpha-beta)+B*alpha+C*beta",
                                                         "sum Twice:(A*(1-alpha)+B*alpha)*(1-beta)+C*beta",
                                                          ], value = "Weight sum:A*(1-alpha)+B*alpha") 
-                    calcmode = gr.Radio(label = "Calcutation Mode",choices = ["normal", "cosineA", "cosineB","trainDifference","smoothAdd","smoothAdd MT","tensor","tensor2"], value = "normal") 
+                    calcmode = gr.Radio(label = "Calcutation Mode",choices = ["normal", "cosineA", "cosineB", "smoothAdd","tensor","tensor2"], value = "normal") 
                     with gr.Row(): 
                         useblocks =  gr.Checkbox(label="use MBW")
                         base_alpha = gr.Slider(label="alpha", minimum=-1.0, maximum=2, step=0.001, value=0.5)
@@ -86,40 +79,33 @@ def on_ui_tabs():
                         #weights = gr.Textbox(label="weights,base alpha,IN00,IN02,...IN11,M00,OUT00,...,OUT11",lines=2,value="0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5")
 
                     with gr.Row():
-                        with gr.Column(scale = 3):
-                            save_sets = gr.CheckboxGroup(["save model", "overwrite","safetensors","fp16","save metadata"], value=["safetensors"], label="save settings")
-                        with gr.Column(min_width = 50, scale = 1):
-                            id_sets = gr.CheckboxGroup(["image", "PNG info"], label="save merged model ID to")
-
+                        merge = gr.Button(elem_id="model_merger_merge", value="Merge!",variant='primary')
+                        mergeandgen = gr.Button(elem_id="model_merger_merge", value="Merge&Gen",variant='primary')
+                        gen = gr.Button(elem_id="model_merger_merge", value="Gen",variant='primary')
+                        stopmerge = gr.Button(elem_id="stopmerge", value="Stop",variant='primary')
                     with gr.Row():
-                        with gr.Column(min_width = 50):
-                            with gr.Row():
-                                custom_name = gr.Textbox(label="Custom Name (Optional)", elem_id="model_converter_custom_name")
-
+                        with gr.Column(scale = 4):
+                            save_sets = gr.CheckboxGroup(["save model", "overwrite","safetensors","fp16","save metadata"], value=["safetensors"], label="save settings")
+                        with gr.Column(scale = 2):
+                            id_sets = gr.CheckboxGroup(["image", "PNG info"], label="write merged model ID to")
+                    with gr.Row():
                         with gr.Column():
                             with gr.Row():
                                 bake_in_vae = gr.Dropdown(choices=["None"] + list(sd_vae.vae_dict), value="None", label="Bake in VAE", elem_id="modelmerger_bake_in_vae")
                                 create_refresh_button(bake_in_vae, sd_vae.refresh_vae_list, lambda: {"choices": ["None"] + list(sd_vae.vae_dict)}, "modelmerger_refresh_bake_in_vae")
 
+                        with gr.Column():
+                            gr.Slider(visible=False)
 
-                    with gr.Row():
-                        merge = gr.Button(elem_id="model_merger_merge", value="Merge!",variant='primary')
-                        mergeandgen = gr.Button(elem_id="model_merger_merge", value="Merge&Gen",variant='primary')
-                        gen = gr.Button(elem_id="model_merger_merge", value="Gen",variant='primary')
-                        stopmerge = gr.Button(elem_id="stopmerge", value="Stop")
+                    with gr.Row():      
+                        with gr.Column(min_width = 50, scale=2):
+                            with gr.Row():
+                                custom_name = gr.Textbox(label="Custom Name (Optional)", elem_id="model_converter_custom_name")
+                                mergeid = gr.Textbox(label="merge from ID", elem_id="model_converter_custom_name",value = "-1")
+                        with gr.Column(min_width = 50, scale=1):
+                            with gr.Row():s_reverse= gr.Button(value="Set from ID(-1 for last)",variant='primary')
 
-                    with gr.Accordion("Generation Parameters",open = False):
-                        gr.HTML(value='If blank or set to 0, parameters in the "txt2img" tab are used.<br>batch size, restore face, hires fix settigns must be set here')
-                        prompt = gr.Textbox(label="prompt",lines=1,value="")
-                        neg_prompt = gr.Textbox(label="neg_prompt",lines=1,value="")
-                        with gr.Row():
-                            sampler = gr.Dropdown(label='Sampling method', elem_id=f"sampling", choices=[" ",*[x.name for x in samplers]], value=" ", type="index")
-                            steps = gr.Slider(minimum=0.0, maximum=150, step=1, label='Steps',value=0, elem_id="Steps")
-                            cfg = gr.Slider(minimum=0.0, maximum=30, step=0.5, label='CFG scale', value=0, elem_id="cfg")
-                        with gr.Row():
-                            width = gr.Slider(minimum=0, maximum=2048, step=8, label="Width", value=0, elem_id="txt2img_width")
-                            height = gr.Slider(minimum=0, maximum=2048, step=8, label="Height", value=0, elem_id="txt2img_height")
-                            seed = gr.Slider(minimum=-1, maximum=4294967295, step=1, label='Seed', value=0, elem_id="seed")
+                    with gr.Accordion("Restore faces, Tiling, Hires. fix, Batch size",open = False):
                         batch_size = denois_str = gr.Slider(minimum=0, maximum=8, step=1, label='Batch size', value=1, elem_id="sm_txt2img_batch_size")
                         genoptions = gr.CheckboxGroup(label = "Gen Options",choices=["Restore faces", "Tiling", "Hires. fix"], visible = True,interactive=True,type="value")    
                         with gr.Row(elem_id="txt2img_hires_fix_row1", variant="compact"):
@@ -127,17 +113,15 @@ def on_ui_tabs():
                             hr2ndsteps = gr.Slider(minimum=0, maximum=150, step=1, label='Hires steps', value=0, elem_id="txt2img_hires_steps")
                             denois_str = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.7, elem_id="txt2img_denoising_strength")
                             hr_scale = gr.Slider(minimum=1.0, maximum=4.0, step=0.05, label="Upscale by", value=2.0, elem_id="txt2img_hr_scale")
-                        with gr.Row():
-                            setdefault = gr.Button(elem_id="setdefault", value="set to default",variant='primary')
-                            resetdefault = gr.Button(elem_id="resetdefault", value="reset default",variant='primary')
-                            resetcurrent = gr.Button(elem_id="resetcurrent", value="reset current",variant='primary')
+                            
+                    hiresfix = [genoptions,hrupscaler,hr2ndsteps,denois_str,hr_scale]
 
                     with gr.Accordion("Elemental Merge",open = False):
                         with gr.Row():
                             esettings1 = gr.CheckboxGroup(label = "settings",choices=["print change"],type="value",interactive=True)
                         with gr.Row():
                             deep = gr.Textbox(label="Blocks:Element:Ratio,Blocks:Element:Ratio,...",lines=2,value="")
-
+                    
                     with gr.Accordion("Tensor Merge",open = False,visible=False):
                         tensor = gr.Textbox(label="Blocks:Tensors",lines=2,value="")
                     
@@ -147,9 +131,7 @@ def on_ui_tabs():
                     xgrid = gr.Textbox(label="Sequential Merge Parameters",lines=3,value="0.25,0.5,0.75")
                     y_type = gr.Dropdown(label="Y type", choices=[y for y in TYPESEG], value="none", type="index")    
                     ygrid = gr.Textbox(label="Y grid (Disabled if blank)",lines=3,value="",visible =False)
-                    z_type = gr.Dropdown(label="Z type", choices=[y for y in TYPESEG], value="none", type="index")    
-                    zgrid = gr.Textbox(label="Z grid (Disabled if blank)",lines=3,value="",visible =False)
-                    esettings = gr.CheckboxGroup(label = "XYZ plot settings",choices=["swap XY","save model","save csv","save anime gif","not save grid","print change"],type="value",interactive=True)
+                    esettings = gr.CheckboxGroup(label = "XY plot settings",choices=["swap XY","save model","save csv","save anime gif","not save grid","print change"],type="value",interactive=True)
                     with gr.Row():
                         gengrid = gr.Button(elem_id="model_merger_merge", value="Sequential XY Merge and Generation",variant='primary')
                         stopgrid = gr.Button(elem_id="model_merger_merge", value="Stop XY",variant='primary')
@@ -170,7 +152,7 @@ def on_ui_tabs():
             with gr.Row(visible = False) as row_blockids:
                 blockids = gr.CheckboxGroup(label = "block IDs",choices=[x for x in blockid],type="value",interactive=True)
             with gr.Row(visible = False) as row_calcmode:
-                calcmodes = gr.CheckboxGroup(label = "calcmode",choices=["normal", "cosineA", "cosineB","trainDifference", "smoothAdd","smoothAdd MT","tensor","tensor2"],type="value",interactive=True)
+                calcmodes = gr.CheckboxGroup(label = "calcmode",choices=["normal", "cosineA", "cosineB", "smoothAdd","tensor","tensor2"],type="value",interactive=True)
             with gr.Row(visible = False) as row_checkpoints:
                 checkpoints = gr.CheckboxGroup(label = "checkpoint",choices=[x.model_name for x in sd_models.checkpoints_list.values()],type="value",interactive=True)
             with gr.Row(visible = False) as row_esets:
@@ -184,13 +166,11 @@ def on_ui_tabs():
                     readbeta = gr.Button(elem_id="copytogen", value="read from beta",variant='primary')
                     setx = gr.Button(elem_id="copytogen", value="set to X",variant='primary')
                 with gr.Row():
-                    weights_a = gr.Textbox(label="weights for alpha: base alpha,IN00,IN02,...IN11,M00,OUT00,...,OUT11",value = "0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5")
-                    weights_b = gr.Textbox(label="weights for beta: base beta,IN00,IN02,...IN11,M00,OUT00,...,OUT11",value = "0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2")
+                    weights_a = gr.Textbox(label="weights for alpha, base alpha,IN00,IN02,...IN11,M00,OUT00,...,OUT11",value = "0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5")
+                    weights_b = gr.Textbox(label="weights,for beta, base beta,IN00,IN02,...IN11,M00,OUT00,...,OUT11",value = "0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2")
                 with gr.Row():
                     with gr.Column():
-                        with gr.Row():
-                            dd_preset_weight = gr.Dropdown(label="Load preset", choices=preset_name_list(weights_presets), interactive=True, elem_id="refresh_presets")
-                            preset_refresh = gr.Button(value='\U0001f504', elem_classes=["tool"])
+                        dd_preset_weight = gr.Dropdown(label="Load preset", choices=preset_name_list(weights_presets))
                     with gr.Column():
                         gr.Slider(visible=False)
 
@@ -259,7 +239,7 @@ def on_ui_tabs():
                     s_delnum = gr.Number(value=1, label="Delete num : ", interactive=True, visible = True,precision =0)
                 with gr.Row():
                     numaframe = gr.Dataframe(
-                        headers=["No.","status","xtype","xmenber","ytype","ymenber","ztype","zmenber","model A","model B","model C","alpha","beta","mode","use MBW","weights alpha","weights beta"],
+                        headers=["No.","status","xtype","xmenber", "ytype","ymenber","model A","model B","model C","alpha","beta","mode","use MBW","weights alpha","weights beta"],
                         row_count=5,)
             # with gr.Tab("manual"):
             #     with gr.Row():
@@ -277,25 +257,6 @@ def on_ui_tabs():
     
         with gr.Tab("LoRA", elem_id="tab_lora"):
             pluslora.on_ui_tabs()
-
-                    
-        with gr.Tab("Analysis", elem_id="tab_analysis"):
-            with gr.Row():
-                an_model_a = gr.Dropdown(sd_models.checkpoint_tiles(),elem_id="model_converter_model_name",label="Checkpoint A",interactive=True)
-                create_refresh_button(an_model_a, sd_models.list_models,lambda: {"choices": sd_models.checkpoint_tiles()},"refresh_checkpoint_Z") 
-                an_model_b = gr.Dropdown(sd_models.checkpoint_tiles(),elem_id="model_converter_model_name",label="Checkpoint B",interactive=True)
-                create_refresh_button(an_model_b, sd_models.list_models,lambda: {"choices": sd_models.checkpoint_tiles()},"refresh_checkpoint_Z") 
-            with gr.Row():
-                an_mode  = gr.Radio(label = "Analysis Mode",choices = ["ASimilarity","Block","Element","Both"], value = "ASimilarity",type  = "value") 
-                an_calc  = gr.Radio(label = "Block method",choices = ["Mean","Min","attn2"], value = "Mean",type  = "value") 
-                an_include  = gr.CheckboxGroup(label = "Include",choices = ["Textencoder(BASE)","U-Net","VAE"], value = ["Textencoder(BASE)","U-Net"],type  = "value") 
-                an_settings = gr.CheckboxGroup(label = "Settings",choices=["save as txt", "save as csv"],type="value",interactive=True)
-            with gr.Row():
-                run_analysis = gr.Button(value="Run Analysis",variant='primary')
-            with gr.Row():
-                analysis_cosdif = gr.Dataframe(headers=["block","key","similarity[%]"],)
-
-        run_analysis.click(fn=calccosinedif,inputs=[an_model_a,an_model_b,an_mode,an_settings,an_include,an_calc],outputs=[analysis_cosdif])    
 
         with gr.Tab("History", elem_id="tab_history"):
             
@@ -351,19 +312,7 @@ def on_ui_tabs():
 
         msettings=[weights_a,weights_b,model_a,model_b,model_c,base_alpha,base_beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae]
         imagegal = [mgallery,mgeninfo,mhtmlinfo,mhtmllog]
-        xysettings=[x_type,xgrid,y_type,ygrid,z_type,zgrid,esettings]
-        genparams=[prompt,neg_prompt,steps,sampler,cfg,seed,width,height,batch_size]
-        hiresfix = [genoptions,hrupscaler,hr2ndsteps,denois_str,hr_scale]
-
-        setdefault.click(fn = configdealer,
-            inputs =[*genparams,*hiresfix[1:],dfalse],
-        )
-
-        resetdefault.click(fn = configdealer,
-            inputs =[*genparams,*hiresfix[1:],dtrue],
-        )
-
-        resetcurrent.click(fn = lambda x : [gr.update(value = x) for x in RESETVALS] ,outputs =[*genparams,*hiresfix[1:]],)
+        xysettings=[x_type,xgrid,y_type,ygrid,esettings]
 
         s_reverse.click(fn = reversparams,
             inputs =mergeid,
@@ -372,43 +321,43 @@ def on_ui_tabs():
 
         merge.click(
             fn=smergegen,
-            inputs=[*msettings,esettings1,*gensets.txt2img_preview_params,*hiresfix,*genparams,currentmodel,dfalse],
+            inputs=[*msettings,esettings1,*gensets.txt2img_preview_params,*hiresfix,batch_size,currentmodel,dfalse],
             outputs=[submit_result,currentmodel]
         )
 
         mergeandgen.click(
             fn=smergegen,
-            inputs=[*msettings,esettings1,*gensets.txt2img_preview_params,*hiresfix,*genparams,currentmodel,dtrue],
+            inputs=[*msettings,esettings1,*gensets.txt2img_preview_params,*hiresfix,batch_size,currentmodel,dtrue],
             outputs=[submit_result,currentmodel,*imagegal]
         )
 
         gen.click(
             fn=simggen,
-            inputs=[*gensets.txt2img_preview_params,*hiresfix,*genparams,currentmodel,id_sets],
+            inputs=[*gensets.txt2img_preview_params,*hiresfix,batch_size,currentmodel,id_sets],
             outputs=[*imagegal],
         )
 
         s_reserve.click(
-            fn=numanager,
-            inputs=[gr.Textbox(value="reserve",visible="False"),*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,*genparams],
+            fn=numaker,
+            inputs=[*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,batch_size],
             outputs=[numaframe]
         )
 
         s_reserve1.click(
-            fn=numanager,
-            inputs=[gr.Textbox(value="reserve",visible="False"),*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,*genparams],
+            fn=numaker,
+            inputs=[*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,batch_size],
             outputs=[numaframe]
         )
 
         gengrid.click(
             fn=numanager,
-            inputs=[gr.Textbox(value="normal",visible="False"),*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,*genparams],
+            inputs=[dtrue,*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,batch_size],
             outputs=[submit_result,currentmodel,*imagegal],
         )
 
         s_startreserve.click(
             fn=numanager,
-            inputs=[gr.Textbox(value=" ",visible="False"),*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,*genparams],
+            inputs=[dfalse,*xysettings,*msettings,*gensets.txt2img_preview_params,*hiresfix,batch_size],
             outputs=[submit_result,currentmodel,*imagegal],
         )
 
@@ -436,30 +385,19 @@ def on_ui_tabs():
         readalpha.click(fn=text2slider,inputs=weights_a,outputs=menbers)
         readbeta.click(fn=text2slider,inputs=weights_b,outputs=menbers)
 
-        def on_change_dd_preset_weight(presets, preset):
-            weights = find_preset_by_name(presets, preset)
+        def on_change_dd_preset_weight(preset):
+            weights = find_preset_by_name(weights_presets, preset)
             if weights is not None:
                 return text2slider(weights)
 
         dd_preset_weight.change(
             fn=on_change_dd_preset_weight,
-            inputs=[wpresets, dd_preset_weight],
+            inputs=[dd_preset_weight],
             outputs=menbers
         )
 
-        def refresh_presets(presets):
-            choices = preset_name_list(presets)
-            return gr.update(choices = choices)
-
-        preset_refresh.click(
-            fn=refresh_presets,
-            inputs=[wpresets],
-            outputs=[dd_preset_weight]
-        )
-
-        x_type.change(fn=showxy,inputs=[x_type,y_type,z_type], outputs=[row_blockids,row_checkpoints,row_inputers,ygrid,zgrid,row_esets,row_calcmode])
-        y_type.change(fn=showxy,inputs=[x_type,y_type,z_type], outputs=[row_blockids,row_checkpoints,row_inputers,ygrid,zgrid,row_esets,row_calcmode])
-        z_type.change(fn=showxy,inputs=[x_type,y_type,z_type], outputs=[row_blockids,row_checkpoints,row_inputers,ygrid,zgrid,row_esets,row_calcmode])
+        x_type.change(fn=showxy,inputs=[x_type,y_type], outputs=[row_blockids,row_checkpoints,row_inputers,ygrid,row_esets,row_calcmode])
+        y_type.change(fn=showxy,inputs=[x_type,y_type], outputs=[row_blockids,row_checkpoints,row_inputers,ygrid,row_esets,row_calcmode])
         x_randseednum.change(fn=makerand,inputs=[x_randseednum],outputs=[xgrid])
 
         import subprocess
@@ -469,9 +407,7 @@ def on_ui_tabs():
         def reloadpresets():
             try:
                 with open(filepath) as f:
-                    weights_presets = f.read()
-                    choices = preset_name_list(weights_presets)
-                    return [weights_presets, gr.update(choices = choices)]
+                    return f.read()
             except OSError as e:
                 pass
 
@@ -479,7 +415,7 @@ def on_ui_tabs():
             with open(filepath,mode = 'w') as f:
                 f.write(text)
 
-        s_reloadtext.click(fn=reloadpresets,inputs=[],outputs=[wpresets, dd_preset_weight])
+        s_reloadtext.click(fn=reloadpresets,inputs=[],outputs=[wpresets])
         s_reloadtags.click(fn=tagdicter,inputs=[wpresets],outputs=[weightstags])
         s_savetext.click(fn=savepresets,inputs=[wpresets],outputs=[])
         s_openeditor.click(fn=openeditors,inputs=[],outputs=[])
@@ -581,17 +517,16 @@ def makerand(num):
     text = text[:-1]
     return text
 
-#0 row_blockids, 1 row_checkpoints, 2 row_inputers,3 ygrid, 4 zgrid, 5 row_esets, 6 row_calcmode
-def showxy(x,y,z):
-    flags =[False]*7
+#row_blockids,row_checkpoints,row_inputers,ygrid
+def showxy(x,y):
+    flags =[False]*6
     t = TYPESEG
-    txy = t[x] + t[y] + t[z]
+    txy = t[x] + t[y]
     if "model" in txy : flags[1] = flags[2] = True
     if "pinpoint" in txy : flags[0] = flags[2] = True
-    if "effective" in txy or "element" in txy : flags[5] = True
-    if "calcmode" in txy : flags[6] = True
+    if "effective" in txy or "element" in txy : flags[4] = True
+    if "calcmode" in txy : flags[5] = True
     if not "none" in t[y] : flags[3] = flags[2] = True
-    if not "none" in t[z] : flags[4] = flags[2] = True
     return [gr.update(visible = x) for x in flags]
 
 def text2slider(text):
@@ -637,210 +572,43 @@ def find_preset_by_name(presets, preset):
 
     return None
 
-BLOCKID=["BASE","IN00","IN01","IN02","IN03","IN04","IN05","IN06","IN07","IN08","IN09","IN10","IN11","M00","OUT00","OUT01","OUT02","OUT03","OUT04","OUT05","OUT06","OUT07","OUT08","OUT09","OUT10","OUT11","Not Merge"]
-
-def blockfromkey(key):
-    re_inp = re.compile(r'\.input_blocks\.(\d+)\.')  # 12
-    re_mid = re.compile(r'\.middle_block\.(\d+)\.')  # 1
-    re_out = re.compile(r'\.output_blocks\.(\d+)\.') # 12
-
-    weight_index = -1
-
-    NUM_INPUT_BLOCKS = 12
-    NUM_MID_BLOCK = 1
-    NUM_OUTPUT_BLOCKS = 12
-    NUM_TOTAL_BLOCKS = NUM_INPUT_BLOCKS + NUM_MID_BLOCK + NUM_OUTPUT_BLOCKS
-
-    if 'time_embed' in key:
-        weight_index = -2                # before input blocks
-    elif '.out.' in key:
-        weight_index = NUM_TOTAL_BLOCKS - 1     # after output blocks
-    else:
-        m = re_inp.search(key)
-        if m:
-            inp_idx = int(m.groups()[0])
-            weight_index = inp_idx
-        else:
-            m = re_mid.search(key)
-            if m:
-                weight_index = NUM_INPUT_BLOCKS
-            else:
-                m = re_out.search(key)
-                if m:
-                    out_idx = int(m.groups()[0])
-                    weight_index = NUM_INPUT_BLOCKS + NUM_MID_BLOCK + out_idx
-    return BLOCKID[weight_index+1]
-
 def loadkeys(model_a):
-    sd = loadmodel(model_a)
+    checkpoint_info = sd_models.get_closet_checkpoint_match(model_a)
+    sd = sd_models.read_state_dict(checkpoint_info.filename,"cpu")
     keys = []
     for i, key in enumerate(sd.keys()):
-        keys.append([i,blockfromkey(key),key])
-    return keys
+        re_inp = re.compile(r'\.input_blocks\.(\d+)\.')  # 12
+        re_mid = re.compile(r'\.middle_block\.(\d+)\.')  # 1
+        re_out = re.compile(r'\.output_blocks\.(\d+)\.') # 12
 
-def loadmodel(model):
-    checkpoint_info = sd_models.get_closet_checkpoint_match(model)
-    sd = sd_models.read_state_dict(checkpoint_info.filename,"cpu")
-    return sd
+        weight_index = -1
+        blockid=["BASE","IN00","IN01","IN02","IN03","IN04","IN05","IN06","IN07","IN08","IN09","IN10","IN11","M00","OUT00","OUT01","OUT02","OUT03","OUT04","OUT05","OUT06","OUT07","OUT08","OUT09","OUT10","OUT11","Not Merge"]
 
-from tqdm import tqdm
-import torch
-from statistics import mean
-import csv
-import pprint
-import torch.nn as nn
-import torch.nn.functional as F
+        NUM_INPUT_BLOCKS = 12
+        NUM_MID_BLOCK = 1
+        NUM_OUTPUT_BLOCKS = 12
+        NUM_TOTAL_BLOCKS = NUM_INPUT_BLOCKS + NUM_MID_BLOCK + NUM_OUTPUT_BLOCKS
 
-
-def calccosinedif(model_a,model_b,mode,settings,include,calc):
-    inc = " ".join(include)
-    settings = " ".join(settings)
-    a, b = loadmodel(model_a), loadmodel(model_b)
-    name = filenamecutter(model_a) + "-" + filenamecutter(model_b)
-    cosine_similarities = []
-    blocksim = {}
-    blockvals = []
-    attn2 = {}
-    for bl in BLOCKID:
-        blocksim[bl] = []
-    blocksim["VAE"] = []
-
-    if "ASim" in mode:
-        result = asimilarity(a,b)
-        if len(settings) > 1: savecalc(result,name,settings,True,"Asim")
-        return result
-    else:
-        for key in tqdm(a.keys(), desc="Calculating cosine similarity"):
-            block = None
-            if blockfromkey(key) == "Not Merge": continue
-            if "model_ema" in key: continue
-            if "model" not in key:continue
-            if "first_stage_model" in key and not ("VAE" in inc):
-                continue
-            elif "first_stage_model" in key and "VAE" in inc:
-                block = "VAE"
-            if "diffusion_model" in key and not ("U-Net" in inc): continue
-            if "encoder" in key and not ("encoder" in inc): continue
-            if key in b and a[key].size() == b[key].size():
-                a_flat = a[key].view(-1).to(torch.float32)
-                b_flat = b[key].view(-1).to(torch.float32)
-                simab = torch.nn.functional.cosine_similarity(a_flat.unsqueeze(0), b_flat.unsqueeze(0))
-                if block is None: block = blockfromkey(key)
-                cosine_similarities.append([block, key, round(simab.item()*100,3)])
-                blocksim[block].append(round(simab.item()*100,3))
-                if "attn2.to_out.0.weight" in key: attn2[block] = round(simab.item()*100,3)
-
-        for bl in BLOCKID:
-            val = None
-            if bl == "Not Merge": continue
-            if bl not in blocksim.keys():continue
-            if "Mean" in calc:
-                val = mean(blocksim[bl])
-            elif "Min" in calc:
-                val = min(blocksim[bl])
-            else:
-                if bl in attn2.keys():val = attn2[bl]
-            if val:blockvals.append([bl,"",round(val,3)])
-            if mode != "Element": cosine_similarities.insert(0,[bl,"",round(mean(blocksim[bl]),3)])
-
-        if mode == "Block":
-            if len(settings) > 1: savecalc(blockvals,name,settings,True,"Blocks")
-            return blockvals
+        if 'time_embed' in key:
+            weight_index = -2                # before input blocks
+        elif '.out.' in key:
+            weight_index = NUM_TOTAL_BLOCKS - 1     # after output blocks
         else:
-            if len(settings) > 1: savecalc(cosine_similarities,name,settings,False,"Elements",)
-            return cosine_similarities
-
-def savecalc(data,name,settings,blocks,add):
-    name = name + "_" + add
-    csvpath = os.path.join(path_root,f"{name}.csv")
-    txtpath = os.path.join(path_root,f"{name}.txt")
-
-    txt = ""
-    for row in data:
-        row = [str(r) for r in row]
-        txt = txt + ",".join(row)+"\n"
-        if blocks: txt = txt.replace(",,",",")
-
-    if "txt" in settings:
-        with  open(txtpath, 'w+') as f:
-            f.writelines(txt)
-            print("file saved to ",txtpath)
-    if "csv" in settings:
-        with  open(csvpath, 'w+') as f:
-            f.writelines(txt)
-            print("file saved to ",csvpath)
-
-#code from https://huggingface.co/JosephusCheung/ASimilarityCalculatior
-
-def cal_cross_attn(to_q, to_k, to_v, rand_input):
-    hidden_dim, embed_dim = to_q.shape
-    attn_to_q = nn.Linear(hidden_dim, embed_dim, bias=False)
-    attn_to_k = nn.Linear(hidden_dim, embed_dim, bias=False)
-    attn_to_v = nn.Linear(hidden_dim, embed_dim, bias=False)
-    attn_to_q.load_state_dict({"weight": to_q})
-    attn_to_k.load_state_dict({"weight": to_k})
-    attn_to_v.load_state_dict({"weight": to_v})
-    
-    return torch.einsum(
-        "ik, jk -> ik", 
-        F.softmax(torch.einsum("ij, kj -> ik", attn_to_q(rand_input), attn_to_k(rand_input)), dim=-1),
-        attn_to_v(rand_input)
-    )
-       
-def eval(model, n, input, block):
-    qk = f"model.diffusion_model.{block}_block{n}.1.transformer_blocks.0.attn1.to_q.weight"
-    uk = f"model.diffusion_model.{block}_block{n}.1.transformer_blocks.0.attn1.to_k.weight"
-    vk = f"model.diffusion_model.{block}_block{n}.1.transformer_blocks.0.attn1.to_v.weight"
-    atoq, atok, atov = model[qk], model[uk], model[vk]
-
-    attn = cal_cross_attn(atoq, atok, atov, input)
-    return attn
-
-ATTN1BLOCKS = [[1,"input"],[2,"input"],[4,"input"],[5,"input"],[7,"input"],[8,"input"],["","middle"],
-[3,"output"],[4,"output"],[5,"output"],[6,"output"],[7,"output"],[8,"output"],[9,"output"],[10,"output"],[11,"output"]]
-
-def asimilarity(model_a,model_b):
-    torch.manual_seed(2244096)
-    sims = []
-  
-    for nblock in  tqdm(ATTN1BLOCKS, desc="Calculating cosine similarity"):
-        n,block = nblock[0],nblock[1]
-        if n != "": n = f"s.{n}"
-        key = f"model.diffusion_model.{block}_block{n}.1.transformer_blocks.0.attn1.to_q.weight"
-
-        hidden_dim, embed_dim = model_a[key].shape
-        rand_input = torch.randn([embed_dim, hidden_dim])
-
-        attn_a = eval(model_a, n, rand_input, block)
-        attn_b = eval(model_b, n, rand_input, block)
-
-        sim = torch.mean(torch.cosine_similarity(attn_a, attn_b))
-        sims.append([blockfromkey(key),"",round(sim.item() * 100,3)])
-        
-    return sims
-
-CONFIGS = ["prompt","neg_prompt","Steps","Sampling method","CFG scale","Seed","Width","Height","Batch size","Upscaler","Hires steps","Denoising strength","Upscale by"]
-RESETVALS = ["","",0," ",0,0,0,0,1,"Latent",0,0.7,2]
-
-def configdealer(prompt,neg_prompt,steps,sampler,cfg,seed,width,height,batch_size,
-                        hrupscaler,hr2ndsteps,denois_str,hr_scale,reset):
-
-    data = [prompt,neg_prompt,steps,sampler,cfg,seed,width,height,batch_size,
-                        hrupscaler,hr2ndsteps,denois_str,hr_scale]
-
-    current_directory = os.getcwd()
-    jsonpath = os.path.join(current_directory,"ui-config.json")
-    print(jsonpath)
-
-    with open(jsonpath, 'r') as file:
-        json_data = json.load(file)
-
-    for name,men,default in zip(CONFIGS,data,RESETVALS):
-        key = f"supermerger/{name}/value"
-        json_data[key] = default if reset else men
-
-    with open(jsonpath, 'w') as file:
-        json.dump(json_data, file, indent=4)
+            m = re_inp.search(key)
+            if m:
+                inp_idx = int(m.groups()[0])
+                weight_index = inp_idx
+            else:
+                m = re_mid.search(key)
+                if m:
+                    weight_index = NUM_INPUT_BLOCKS
+                else:
+                    m = re_out.search(key)
+                    if m:
+                        out_idx = int(m.groups()[0])
+                        weight_index = NUM_INPUT_BLOCKS + NUM_MID_BLOCK + out_idx
+        keys.append([i,blockid[weight_index+1],key])
+    return keys
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
 script_callbacks.on_ui_train_tabs(on_ui_train_tabs)
