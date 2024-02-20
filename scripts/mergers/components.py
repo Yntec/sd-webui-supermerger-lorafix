@@ -7,7 +7,6 @@ gengrid = None
 s_startreserve = None
 rand_merge = None
 paramsnames = None
-frompromptf = None
 
 msettings = None
 esettings1 = None
