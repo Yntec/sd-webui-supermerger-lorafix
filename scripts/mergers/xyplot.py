@@ -21,43 +21,40 @@ def freezetime():
     global state_mergen
     state_mergen = True
 
-def separator(allsets,index,sep,men,seed,startmode):
-    if seed =="-1": allsets[30] = str(random.randrange(4294967294))
-    mens = men.split(sep)
-    if "reserve" not in startmode:
-        allsets[index] = mens[0]
-        for men in mens[1:]:
-            numaker([*allsets[0:index],men,*allsets[index+1:]])
-    else:
-        allsets[index] = mens[-1]
-        for men in mens[:-1]:
-            numaker([*allsets[0:index],men,*allsets[index+1:]])
-    return allsets
-
-def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
+def numanager(normalstart,xtype,xmen,ytype,ymen,esettings,
                     weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
                     prompt,nprompt,steps,sampler,cfg,seed,w,h,
-                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,
-                    s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,batch_size):
+                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size):
     global numadepth
     grids = []
     sep = "|"
 
-    allsets = [xtype,xmen,ytype,ymen,ztype,zmen,esettings,
-                  weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
-                  prompt,nprompt,steps,sampler,cfg,seed,w,h,
-                  hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,
-                  s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,batch_size]
+    if sep  in xmen:
+        xmens = xmen.split(sep)
+        xmen = xmens[0]
+        if seed =="-1": seed = str(random.randrange(4294967294))
+        for men in xmens[1:]:
+            numaker(xtype,men,ytype,ymen,esettings,
+                        weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
+                        prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                        hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size)
+    elif sep  in ymen:
+        ymens = ymen.split(sep)
+        ymen = ymens[0]
+        if seed =="-1": seed = str(random.randrange(4294967294))
+        for men in ymens[1:]:
+            numaker(xtype,xmen,ytype,men,esettings,
+                        weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
+                        prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                        hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size)
 
-    if sep in xmen: allsets = separator(allsets,1,sep,xmen,seed,startmode)
-    if sep in ymen: allsets = separator(allsets,3,sep,ymen,seed,startmode)
-    if sep in zmen: allsets = separator(allsets,5,sep,zmen,seed,startmode)
-
-    if "reserve" in startmode : return numaker(allsets)
-
-    if "normal" in startmode:
-        result,currentmodel,xyimage,a,b,c= sgenxyplot(*allsets)
-        if xyimage is not None:grids = xyimage
+    if normalstart:
+        result,currentmodel,xyimage,a,b,c= sgenxyplot(xtype,xmen,ytype,ymen,esettings,
+                                                                             weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
+                                                                             useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
+                                                                             prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                                                                             hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size)
+        if xyimage is not None:grids =[xyimage[0]]
         else:print(result)
     else:
         if numadepth ==[]:
@@ -89,9 +86,18 @@ def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
 
     return result,currentmodel,grids,a,b,c
 
-def numaker(allsets):
+def numaker(xtype,xmen,ytype,ymen,esettings,
+#msettings=[weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,useblocks,custom_name,save_sets,id_sets,wpresets]       
+                    weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
+                    useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
+                    prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size):
     global numadepth
-    numadepth.append([len(numadepth)+1,"waiting",*allsets])
+    numadepth.append([len(numadepth)+1,"waiting",xtype,xmen,ytype,ymen,esettings,
+                    weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
+                    useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
+                    prompt,nprompt,steps,sampler,cfg,seed,w,h,
+                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size])
     return numalistmaker(copy.deepcopy(numadepth))
 
 def nulister(redel):
@@ -110,18 +116,17 @@ def numalistmaker(numa):
     for i,r in enumerate(numa):
         r[2] =  TYPES[int(r[2])]
         r[4] =  TYPES[int(r[4])]
-        numa[i] = r[0:8]+r[11:14]+r[14:18]+r[9:11]
+        numa[i] = r[0:6]+r[8:11]+r[12:16]+r[6:8]
     return numa
 
 def caster(news,hear):
     if hear: print(news)
 
-def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
+def sgenxyplot(xtype,xmen,ytype,ymen,esettings,
                     weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
                     useblocks,custom_name,save_sets,id_sets,wpresets,deep,tensor,bake_in_vae,
                     prompt,nprompt,steps,sampler,cfg,seed,w,h,
-                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,
-                    s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,batch_size):
+                    hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size):
     global hear
     esettings = " ".join(esettings)
 
@@ -129,40 +134,31 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
     #type[0:none,1:aplha,2:beta,3:seed,4:mbw,5:model_A,6:model_B,7:model_C,8:pinpoint 9:deep]
     xtype = TYPES[xtype]
     ytype = TYPES[ytype]
-    ztype = TYPES[ztype]
-    xyz =xtype + ytype + ztype 
-
     if ytype == "none": ymen = ""
-    if ztype == "none": zmen = ""
 
     modes=["Weight" ,"Add" ,"Triple","Twice"]
-    xs=ys=ys=0
+    xs=ys=0
     weights_a_in=weights_b_in="0"
 
     deepprint  = True if "print change" in esettings else False
 
     def castall(hear):
-        if hear :print(f"xmen:{xmen}, ymen:{ymen},zmen:{zmen}, xtype:{xtype}, ytype:{ytype}, ztype:{ztype} weights_a:{weights_a_in}, weights_b:{weights_b_in}, model_A:{model_a},model_B :{model_b}, model_C:{model_c}, alpha:{alpha},\
+        if hear :print(f"xmen:{xmen}, ymen:{ymen}, xtype:{xtype}, ytype:{ytype}, weights_a:{weights_a_in}, weights_b:{weights_b_in}, model_A:{model_a},model_B :{model_b}, model_C:{model_c}, alpha:{alpha},\
         beta :{beta}, mode:{mode}, blocks:{useblocks}")
 
-    pinpoint = "pinpoint blocks" in xyz and "alpha" in xyz
-
+    pinpoint = "pinpoint blocks" in xtype or "pinpoint blocks" in ytype
     usebeta = modes[2] in mode or modes[3] in mode
 
-    if "prompt" in xyz: s_prompt = ""
-    if "seed" in xyz: s_seed = 0
-
     #check and adjust format
-    print(f"XY plot start, mode:{mode}, X: {xtype}, Y: {ytype}, Z: {ztype} MBW: {useblocks}")
+    print(f"XY plot start, mode:{mode}, X: {xtype}, Y: {ytype}, MBW: {useblocks}")
     castall(hear)
     None5 = [None,None,None,None,None]
     if xmen =="": return "ERROR: parameter X is empty",*None5
     if ymen =="" and not ytype=="none": return "ERROR: parameter Y is empty",*None5
-    if zmen =="" and not ztype=="none": return "ERROR: parameter Z is empty",*None5
-    if model_a ==[] and "model_A" not in xyz:return f"ERROR: model_A is not selected",*None5
-    if model_b ==[] and "model_B" not in xyz:return f"ERROR: model_B is not selected",*None5
-    if model_c ==[] and usebeta and "model_C" not in xyz:return "ERROR: model_C is not selected",*None5
-    if xtype == ytype and xtype != "add elemental": return "ERROR: same type selected for X,Y",*None5
+    if model_a ==[] and not ("model_A" in xtype or "model_A" in ytype):return f"ERROR: model_A is not selected",*None5
+    if model_b ==[] and not ("model_B" in xtype or "model_B" in ytype):return f"ERROR: model_B is not selected",*None5
+    if model_c ==[] and usebeta and not ("model_C" in xtype or "model_C" in ytype):return "ERROR: model_C is not selected",*None5
+    if xtype == ytype: return "ERROR: same type selected for X,Y",*None5
 
     if useblocks:
         weights_a_in=wpreseter(weights_a,wpresets)
@@ -178,53 +174,57 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         print(f"the die was thrown : {zs}")
 
     #adjust parameters, alpha,beta,models,seed: list of single parameters, mbw(no beta):list of text,mbw(usebeta); list of pair text
-    def adjuster(wmen,wtype,awtype,bwtype):
-        if "mbw" in wtype or "prompt" in wtype:#men separated by newline
-            ws = wmen.splitlines()
-            caster(ws,hear)
-            if "mbw alpha and beta" in wtype:
-                ws = [ws[i:i+2] for i in range(0,len(ws),2)]
-                caster(ws,hear)
-        elif "elemental" in wtype:
-            ws = wmen.split("\n\n")
+    def adjuster(zmen,ztype,aztype):
+        if "mbw" in ztype or "prompt" in ztype:#men separated by newline
+            zs = zmen.splitlines()
+            caster(zs,hear)
+            if "mbw alpha and beta" in ztype:
+                zs = [zs[i:i+2] for i in range(0,len(zs),2)]
+                caster(zs,hear)
+        elif "elemental" in ztype:
+            zs = zmen.split("\n\n")
         else:
-            if "pinpoint element" in wtype:
-                wmen = wmen.replace("\n",",")
-            if "effective" in wtype:
-                wmen = ","+wmen
-                wmen = wmen.replace("\n",",")
-            ws = [w.strip() for w in wmen.split(',')]
-            caster(ws,hear)
-        if "alpha" in wtype and ("effective" in awtype or "effective" in bwtype):
-            ws = [ws[0]]
-        if "seed" in wtype:dicedealer(ws)
-        if "alpha" == wtype or "beta" == wtype:
-            ow = []
-            for w in ws:
+            if "pinpoint element" in ztype:
+                zmen = zmen.replace("\n",",")
+            if "effective" in ztype:
+                zmen = ","+zmen
+                zmen = zmen.replace("\n",",")
+            zs = [z.strip() for z in zmen.split(',')]
+            caster(zs,hear)
+        if "alpha" in ztype and "effective" in aztype:
+            zs = [zs[0]]
+        if "seed" in ztype:dicedealer(zs)
+        if "alpha" == ztype or "beta" == ztype:
+            oz = []
+            for z in zs:
                 try:
-                    float(w)
-                    ow.append(w)
+                    float(z)
+                    oz.append(z)
                 except:
                     pass
-            ws = ow
-        return ws
+            zs = oz
+        return zs
 
-    xs = adjuster(xmen,xtype,ytype,ztype)
-    ys = adjuster(ymen,ytype,xtype,ztype)
-    zs = adjuster(zmen,ztype,xtype,ytype)
+    xs = adjuster(xmen,xtype,ytype)
+    ys = adjuster(ymen,ytype,xtype)
 
     #in case beta selected but mode is Weight sum or Add or Diff
-    if ("beta" in xyz) and (not usebeta and "tensor" not in calcmode):
+    if ("beta" in xtype or "beta" in ytype) and (not usebeta and "tensor" not in calcmode):
         mode = modes[3]
         print(f"{modes[3]} mode automatically selected)")
 
     #in case mbw or pinpoint selected but useblocks not chekced
-    if "mbw" in xyz and not useblocks:
+    if ("mbw" in xtype or "pinpoint blocks" in xtype) and not useblocks:
         useblocks = True
         print(f"MBW mode enabled")
 
-    xcount = ycount = zcount = 0
-    allcount = len(xs)*len(ys)*len(zs)
+    if ("mbw" in ytype or "pinpoint blocks" in ytype) and not useblocks:
+        useblocks = True
+        print(f"MBW mode enabled")
+
+    xyimage=[]
+    xcount =ycount=0
+    allcount = len(xs)*len(ys)
 
     #for STOP XY bottun
     flag = False
@@ -234,30 +234,30 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
     #type[0:none,1:aplha,2:beta,3:seed,4:mbw,5:model_A,6:model_B,7:model_C,8:pinpoint ]
     blockid=["BASE","IN00","IN01","IN02","IN03","IN04","IN05","IN06","IN07","IN08","IN09","IN10","IN11","M00","OUT00","OUT01","OUT02","OUT03","OUT04","OUT05","OUT06","OUT07","OUT08","OUT09","OUT10","OUT11"]
     #format ,IN00 IN03,IN04-IN09,OUT4,OUT05
-    def weightsdealer(xyzval: list,xyztype: list,weights: str, mode: str):
+    def weightsdealer(x,xtype,y,weights):
         caster(f"weights from : {weights}",hear)
-        ww = xyzval[xyztype.index("pinpoint blocks")]
-        wa = xyzval[xyztype.index(mode)]
-        ww = [w.strip() for w in ww.split(' ')]
+        zz = x if "pinpoint blocks" in xtype else y
+        za = y if "pinpoint blocks" in xtype else x
+        zz = [z.strip() for z in zz.split(' ')]
         weights_t = [w.strip() for w in weights.split(',')]
-        if ww[0]!="NOT":
+        if zz[0]!="NOT":
             flagger=[False]*26
             changer = True
         else:
             flagger=[True]*26
             changer = False
-        for w in ww:
-            if w =="NOT":continue
-            if "-" in w:
-                wt = [wt.strip() for wt in w.split('-')]
-                if  blockid.index(wt[1]) > blockid.index(wt[0]):
-                    flagger[blockid.index(wt[0]):blockid.index(wt[1])+1] = [changer]*(blockid.index(wt[1])-blockid.index(wt[0])+1)
+        for z in zz:
+            if z =="NOT":continue
+            if "-" in z:
+                zt = [zt.strip() for zt in z.split('-')]
+                if  blockid.index(zt[1]) > blockid.index(zt[0]):
+                    flagger[blockid.index(zt[0]):blockid.index(zt[1])+1] = [changer]*(blockid.index(zt[1])-blockid.index(zt[0])+1)
                 else:
-                    flagger[blockid.index(wt[1]):blockid.index(wt[0])+1] = [changer]*(blockid.index(wt[0])-blockid.index(wt[1])+1)
+                    flagger[blockid.index(zt[1]):blockid.index(zt[0])+1] = [changer]*(blockid.index(zt[0])-blockid.index(zt[1])+1)
             else:
-                flagger[blockid.index(w)] =changer    
+                flagger[blockid.index(z)] =changer    
         for i,f in enumerate(flagger):
-            if f:weights_t[i]=wa
+            if f:weights_t[i]=za
         outext = ",".join(weights_t)
         caster(f"weights changed: {outext}",hear)
         return outext
@@ -266,119 +266,99 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         if " " in z:return z.split(" ")[0],z.split(" ")[1]
         return z,z
 
-    def xydealer(w,wt,awt,bwt):
-        wta = awt + bwt
+    def xydealer(z,zt,azt):
         nonlocal alpha,beta,seed,weights_a_in,weights_b_in,model_a,model_b,model_c,deep,calcmode,prompt
-        if "prompt" in wt:
-            prompt = w
-            return
-        if "pinpoint blocks" in wt or "pinpoint element" in wt or "effective" in wt:return
-        if "mbw" in wt:
-            def weightser(w):return w, w.split(',',1)[0]
-            if "mbw alpha and beta" in wt:
-                weights_a_in,alpha = weightser(wpreseter(w[0],wpresets))
-                weights_b_in,beta = weightser(wpreseter(w[1],wpresets))
+        if pinpoint or "pinpoint element" in zt or "effective" in zt:return
+        if "mbw" in zt:
+            def weightser(z):return z, z.split(',',1)[0]
+            if "mbw alpha and beta" in zt:
+                weights_a_in,alpha = weightser(wpreseter(z[0],wpresets))
+                weights_b_in,beta = weightser(wpreseter(z[1],wpresets))
                 return
-            elif "alpha" in wt:
-                weights_a_in,alpha = weightser(wpreseter(w,wpresets))
+            elif "alpha" in zt:
+                weights_a_in,alpha = weightser(wpreseter(z,wpresets))
                 return
             else:
-                weights_b_in,beta = weightser(wpreseter(w,wpresets))
+                weights_b_in,beta = weightser(wpreseter(z,wpresets))
                 return
-        if "and" in wt:
-            alpha,beta = abdealer(w)
+        if "and" in zt:
+            alpha,beta = abdealer(z)
             return
-        if "alpha" in wt and not ("pinpoint element" in wta or "effective" in wta):alpha = w
-        if "beta" in wt: beta = w
-        if "seed" in wt:seed = int(w)
-        if "model_A" in wt:model_a = w
-        if "model_B" in wt:model_b = w
-        if "model_C" in wt:model_c = w
-        if "elemental" in wt:
-            deep = deep  +","+ w if "add" in wt else w
-        if "calcmode" in wt:calcmode = w
+        if "alpha" in zt and not ("pinpoint element" in azt or "effective" in azt):alpha = z
+        if "beta" in zt: beta = z
+        if "seed" in zt:seed = int(z)
+        if "model_A" in zt:model_a = z
+        if "model_B" in zt:model_b = z
+        if "model_C" in zt:model_c = z
+        if "elemental" in zt:
+            deep = deep_ori  +","+ z if "add" in zt else z
+        if "calcmode" in zt:calcmode = z
+        if "prompt" in zt:prompt = z
     
-    def elementdealer(xyzval,xyztype):
-        return str(xyzval[blockid.index("pinpoint element")]) + ":" + str(xyzval[blockid.index("effective")])
-
     # plot start
+    for y in ys:
+        xydealer(y,ytype,xtype)
+        xcount = 0
+        for x in xs:
+            xydealer(x,xtype,ytype)
+            if ("alpha" in xtype or "alpha" in ytype) and pinpoint:
+                weights_a_in = weightsdealer(x,xtype,y,weights_a)
+                weights_b_in = weights_b
+            if ("beta" in xtype or "beta" in ytype) and pinpoint:
+                weights_b_in = weightsdealer(x,xtype,y,weights_b)
+                weights_a_in =weights_a
+            if "pinpoint element" in xtype or "effective" in xtype:
+                deep_in = deep +","+ str(x)+":"+ str(y) 
+            elif "pinpoint element" in ytype or "effective" in ytype:
+                deep_in = deep +","+ str(y)+":"+ str(x) 
+            else:
+                deep_in = deep
 
-    xyzimage=[]
-    for z in zs:
-        ycount = 0
-        xyimage = []
-        xydealer(z,ztype,xtype,ytype)
-        for y in ys:
-            deep = deep_ori
-            xydealer(y,ytype,xtype,ztype)
-            xcount = 0
-            for x in xs:
-                deepy = deep
-                xydealer(x,xtype,ytype,ztype)
-                if pinpoint and "alpha" in [xtype,ytype,ztype]:
-                    weights_a_in = weightsdealer([x,y,z],[xtype,ytype,ztype],weights_a,"alpha")
-                    weights_b_in = weights_b
-                if pinpoint and "beta" in [xtype,ytype,ztype]:
-                    weights_b_in = weightsdealer([x,y,z],[xtype,ytype,ztype],weights_b,"beta")
-                    weights_a_in = weights_a
-                if "pinpoint element" in xyz or "effective" in xyz:
-                    deep_in = deep + elementdealer([x,y,z],[xtype,ytype,ztype])
-                else:
-                    deep_in = deep
+            print(f"XY plot: X: {xtype}, {str(x)}, Y: {ytype}, {str(y)} ({xcount+ycount*len(xs)+1}/{allcount})")
+            if not (xtype=="seed" and xcount > 0):
+               _, currentmodel,modelid,theta_0, metadata =smerge(weights_a_in,weights_b_in, model_a,model_b,model_c, float(alpha),float(beta),mode,calcmode,
+                                                                                useblocks,"","",id_sets,False,deep_in,tensor,bake_in_vae,deepprint = deepprint) 
+               usemodelgen(theta_0,model_a,currentmodel)
+               if "save model" in esettings:
+                   savemodel(theta_0,currentmodel,custom_name,save_sets,model_a,metadata) 
+                             # simggen(prompt, nprompt, steps, sampler, cfg, seed, w, h,mergeinfo="",id_sets=[],modelid = "no id"):
+            image_temp = simggen(prompt, nprompt, steps, sampler, cfg, seed, w, h,hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,batch_size,currentmodel,id_sets,modelid)
+            xyimage.append(image_temp[0][0])
+            xcount+=1
+            if state_mergen:
+                flag = True
+                break
+        ycount+=1
+        if flag:break
 
-                print(f"XY plot: X: {xtype}, {str(x)}, Y: {ytype}, {str(y)}, Z: {ztype}, {str(z)} ({len(xs)*len(ys)*zcount + ycount*len(xs) +xcount +1}/{allcount})")
-                if not (((xtype=="seed") or (xtype=="prompt")) and xcount > 0):
-                    _, currentmodel,modelid,theta_0, metadata =smerge(weights_a_in,weights_b_in, model_a,model_b,model_c, float(alpha),float(beta),mode,calcmode,
-                                                                                        useblocks,"","",id_sets,False,deep_in,tensor,bake_in_vae,deepprint = deepprint) 
-                    usemodelgen(theta_0,model_a,currentmodel)
-                if "save model" in esettings:
-                    savemodel(theta_0,currentmodel,custom_name,save_sets,model_a,metadata) 
-                                # simggen(prompt, nprompt, steps, sampler, cfg, seed, w, h,mergeinfo="",id_sets=[],modelid = "no id"):
-                image_temp = simggen(prompt, nprompt, steps, sampler, cfg, seed, w, h,hireson,hrupscaler,hr2ndsteps,denoise_str,hr_scale,
-                                       s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,batch_size,currentmodel,id_sets,modelid)
-                xyimage.append(image_temp[0][0])
-                xcount+=1
-                deep = deepy
-                if state_mergen:
-                    flag = True
-                    break
-            ycount+=1
-            if flag:break
+    if flag and ycount ==1:
+        xs = xs[:xcount]
+        ys = [ys[0],]
+        print(f"stopped at x={xcount},y={ycount}")
+    elif flag:
+        ys=ys[:ycount]
+        print(f"stopped at x={xcount},y={ycount}")
 
-        if flag and ycount ==1:
-            xs = xs[:xcount]
-            ys = [ys[0],]
-            print(f"stopped at x={xcount},y={ycount}")
-        elif flag:
-            ys = ys[:ycount]
-            print(f"stopped at x={xcount},y={ycount}")
-        
-        (xs_t, ys_t) = (xs.copy(), ys.copy())
+    if "mbw alpha and beta" in xtype: xs = [f"alpha:({x[0]}),beta({x[1]})" for x in xs ]
+    if "mbw alpha and beta" in ytype: ys = [f"alpha:({y[0]}),beta({y[1]})" for y in ys ]
 
-        if "mbw alpha and beta" in xtype: xs_t = [f"alpha:({x[0]}),beta({x[1]})" for x in xs ]
-        if "mbw alpha and beta" in ytype: ys_t = [f"alpha:({y[0]}),beta({y[1]})" for y in ys ]
+    xs[0]=xtype+" = "+xs[0] #draw X label
+    if ytype!=TYPES[0] or "model" in ytype:ys[0]=ytype+" = "+ys[0]  #draw Y label
 
-        xs_t[0]=xtype+" = "+xs_t[0] #draw X label
-        if ytype!=TYPES[0] or "model" in ytype:ys_t[0]=ytype+" = "+ys[0]  #draw Y label
+    if ys==[""]:ys = [" "]
 
-        if ys_t==[""]:ys_t = [" "]
+    if "effective" in xtype or "effective" in ytype:
+        xyimage,xs,ys = effectivechecker(xyimage,xs,ys,model_a,model_b,esettings)
 
-        if "effective" in xtype or "effective" in ytype:
-            xyimage,xs_t,ys_t = effectivechecker(xyimage,xs_t,ys_t,model_a,model_b,esettings)
-
-        if not "grid" in esettings:
-            if "swap XY" in esettings:
-                xyimage, xs_t, ys_t = swapxy(xyimage, xs_t, ys_t)
-            gridmodel= makegridmodelname(model_a, model_b,model_c, useblocks,mode,xtype,ytype,alpha,beta,weights_a,weights_b,usebeta)
-            grid = smakegrid(xyimage,xs_t,ys_t,gridmodel,image_temp[4])
-            xyimage.insert(0,grid)
-
-        zcount+=1
-        xyzimage.append(xyimage[0])
-        if flag: break
+    if not "grid" in esettings:
+        if "swap XY" in esettings:
+            xyimage, xs, ys = swapxy(xyimage, xs, ys)
+        gridmodel= makegridmodelname(model_a, model_b,model_c, useblocks,mode,xtype,ytype,alpha,beta,weights_a,weights_b,usebeta)
+        grid = smakegrid(xyimage,xs,ys,gridmodel,image_temp[4])
+        xyimage.insert(0,grid)
 
     state_mergen = False
-    return "Finished",currentmodel,xyzimage,*image_temp[1:4]
+    return "Finished",currentmodel,xyimage,*image_temp[1:4]
 
 def smakegrid(imgs,xs,ys,currentmodel,p):
     ver_texts = [[images.GridAnnotation(y)] for y in ys]
