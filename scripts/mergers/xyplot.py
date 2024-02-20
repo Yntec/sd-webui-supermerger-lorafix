@@ -11,7 +11,6 @@ from modules import images, sd_models, devices
 from modules.shared import opts
 from scripts.mergers.mergers import TYPES,FINETUNEX,smerge,simggen,filenamecutter,draw_origin,wpreseter,savestatics
 from scripts.mergers.model_util import savemodel,usemodel
-from scripts.mergers.bcolors import bcolors
 
 hear = True
 hearm = False
@@ -24,6 +23,17 @@ RAND = "random"
 
 numadepth = []
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 def freezetime():
     global state_mergen
     state_mergen = True
@@ -34,7 +44,7 @@ def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                     s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,s_batch_size,
                     genoptions,s_hrupscaler,s_hr2ndsteps,s_denois_str,s_hr_scale,
                     lmode,lsets,llimits_u,llimits_l,lseed,lserial,lcustom,lround,
-                    *txt2imgparams):
+                    id_task, prompt, negative_prompt, prompt_styles, steps, sampler_index, restore_faces, tiling, n_iter, batch_size, cfg_scale, seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_enable_extras, height, width, enable_hr, denoising_strength, hr_scale, hr_upscaler, hr_second_pass_steps, hr_resize_x, hr_resize_y, hr_sampler_index, hr_prompt, hr_negative_prompt, override_settings_texts, *args):
     global numadepth
     grids = []
     sep = "|"
@@ -47,15 +57,15 @@ def numanager(startmode,xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         xtype,xmen,ytype,ymen,weights_a,weights_b = crazyslot(lmode,lsets,llimits_u,llimits_l,lseed,lserial,lcustom,xtype,xmen,ytype,ymen,weights_a,weights_b,startmode)
 
     lucks = {"on":startmode == RAND, "mode":lmode,"set":lsets,"upp":llimits_u,"low":llimits_l,"seed":lseed,"num":lserial,"cust":lcustom,"round":int(lround)}
+    gensets = [id_task, prompt, negative_prompt, prompt_styles, steps, sampler_index, restore_faces, tiling, n_iter, batch_size, cfg_scale, seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_enable_extras, height, width, enable_hr, denoising_strength, hr_scale, hr_upscaler, hr_second_pass_steps, hr_resize_x, hr_resize_y, hr_sampler_index, hr_prompt, hr_negative_prompt, override_settings_texts, *args,]
     gensets_s = [s_prompt,s_nprompt,s_steps,s_sampler,s_cfg,s_seed,s_w,s_h,s_batch_size,genoptions,s_hrupscaler,s_hr2ndsteps,s_denois_str,s_hr_scale]
 
     allsets = [xtype,xmen,ytype,ymen,ztype,zmen,esettings,
                   weights_a,weights_b,model_a,model_b,model_c,alpha,beta,mode,calcmode,
                   useblocks,custom_name,save_sets,id_sets,wpresets,deep,fine,bake_in_vae,
-                  txt2imgparams,gensets_s,lucks]
+                  gensets,gensets_s,lucks]
 
-    from scripts.mergers.components import paramsnames
-    seed = txt2imgparams[paramsnames.index("Seed")]
+    print(xtype,xmen,ytype,ymen,weights_a,weights_b)
 
     if RAND not in startmode:
         if sep in xmen: allsets = separator(allsets,1,sep,xmen,seed,startmode)
@@ -200,10 +210,7 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         weights_b_in=wpreseter(weights_b,wpresets)
 
     #for X only plot, use same seed
-    if gensets[11] == -1: gensets[11] = int(random.randrange(4294967294))
-    
-    #gensets :prompt:1,seed:11
-    #gensets_s :prompt:0, seed:5
+    if gensets[5] == -1: gensets[5] = int(random.randrange(4294967294))
 
     #for XY plot, use same seed
     def dicedealer(zs):
@@ -306,7 +313,7 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
         wta = awt + bwt
         nonlocal alpha,beta,gensets,weights_a_in,weights_b_in,model_a,model_b,model_c,deep,calcmode,fine
         if "prompt" in wt:
-            gensets[1] = w
+            gensets[0] = w
             return
         if "pinpoint blocks" in wt or "pinpoint element" in wt or "effective" in wt:return
         if "mbw" in wt:
@@ -324,7 +331,7 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
             return
         if "alpha" in wt and not ("pinpoint element" in wta or "effective" in wta or "pinpoint adjust" in wta):alpha = w
         if "beta" in wt: beta = w
-        if "seed" in wt:gensets[11] = int(w)
+        if "seed" in wt:gensets[5] = int(w)
         if "model_A" in wt:model_a = w
         if "model_B" in wt:model_b = w
         if "model_C" in wt:model_c = w
@@ -390,7 +397,7 @@ def sgenxyplot(xtype,xmen,ytype,ymen,ztype,zmen,esettings,
 
                 if xcount == 0: statid = modelid
 
-                image_temp = simggen(*gensets_s,currentmodel,id_sets,modelid,*gensets)
+                image_temp = simggen(*gensets_s,*gensets,mergeinfo=currentmodel,id_sets=id_sets,modelid=modelid)
                 gc.collect()
                 devices.torch_gc()
 
