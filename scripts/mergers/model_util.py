@@ -692,7 +692,6 @@ def savemodel(state_dict,currentmodel,fname,savesets,model_a,metadata={}):
         fname = fname if ext in fname else fname +pre+ext
 
     fname = os.path.join(modeldir, fname)
-    fname = fname.replace("ProgramFiles_x86_","Program Files (x86)")
 
     if len(fname) > 255:
        fname.replace(ext,"")
@@ -710,9 +709,9 @@ def savemodel(state_dict,currentmodel,fname,savesets,model_a,metadata={}):
           safetensors.torch.save_file(state_dict, fname, metadata=metadata)
       else:
           torch.save(state_dict, fname)
-    except Exception as e:
-      print(f"ERROR: Couldn't saved:{fname},ERROR is {e}")
-      return f"ERROR: Couldn't saved:{fname},ERROR is {e}"
+    except:
+      print(f"ERROR: Couldn't saved:{fname}")
+      return f"ERROR: Couldn't saved:{fname}"
     print("Done!")
     return "Merged model saved in "+fname
 
