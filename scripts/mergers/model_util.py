@@ -4,7 +4,6 @@ import torch
 from transformers import CLIPTextModel,  CLIPTextConfig
 from safetensors.torch import load_file
 import safetensors.torch
-import threading
 from modules import shared
 from modules.sd_models import read_state_dict
 try:
@@ -897,11 +896,6 @@ sdxl_clip_weight = 'conditioner.embedders.1.model.ln_final.weight'
 sdxl_refiner_clip_weight = 'conditioner.embedders.0.model.ln_final.weight'
 
 def usemodel(checkpoint_info=None, already_loaded_state_dict=None):
-  with threading.Lock():
-    usemodel_in(checkpoint_info,already_loaded_state_dict)
-  torch.cuda.empty_cache()
-
-def usemodel_in(checkpoint_info=None, already_loaded_state_dict=None):
     from modules import lowvram, sd_hijack
     checkpoint_info = checkpoint_info or msd.select_checkpoint()
 
@@ -911,10 +905,8 @@ def usemodel_in(checkpoint_info=None, already_loaded_state_dict=None):
         gc.collect()
         devices.torch_gc()
 
-    try:
-      msd.do_inpainting_hijack()
-    except:
-      pass
+    msd.do_inpainting_hijack()
+
     timer = msd.Timer()
 
     if already_loaded_state_dict is not None:
@@ -1031,7 +1023,6 @@ def load_model_weights(model, checkpoint_info: msd.CheckpointInfo, state_dict, t
       devices.unet_needs_upcast = shared.cmd_opts.upcast_sampling and devices.dtype == torch.float16 and devices.dtype_unet == torch.float16
 
     model.first_stage_model.to(devices.dtype_vae)
-    model.has_accelerate = False
     timer.record("apply dtype to VAE")
 
     model.sd_model_hash = sd_model_hash
